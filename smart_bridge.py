@@ -383,9 +383,9 @@ async def chat_completions(request: Request):
                 headers=headers, 
                 stream=True,
                 # (connect_timeout, read_timeout) in seconds.
-                # 10s to establish connection (catches dead proxies fast).
+                # 25s to establish connection (catches dead proxies).
                 # 600s (10 min) between chunks (lets thinking/reasoning models work).
-                timeout=(10, 600)
+                timeout=(25, 600)
             )
             
             if upstream_req.status_code != 200:
