@@ -212,26 +212,34 @@ def generate_opencode_config(selected_models=None, do_test=False, top_n=None):
     for m in all_models:
         MODEL_MAP[m["label"]] = m
             
-    final_models = []
+    pre_test_models = []
     
     if selected_models is not None:
-        if do_test:
-            print("\n🔬 Running live tests on selected models...")
-            for m in selected_models:
-                if test_model_live(m):
-                    final_models.append(m)
-            print(f"✅ {len(final_models)} out of {len(selected_models)} passed the test.")
-        else:
-            final_models = selected_models
+        pre_test_models = selected_models
     else:
         if top_n is not None:
-            g4f_top = [m for m in all_models if m["backend"] == "G4F"][:top_n]
-            eaon_top = [m for m in all_models if m["backend"] == "EAON"]
-            final_models = g4f_top + eaon_top
-            print(f"🌟 Selecting Top {top_n} models from G4F and ALL {len(eaon_top)} models from EAON (Total: {len(final_models)}).")
+            if top_n == -1:
+                g4f_top = [m for m in all_models if m["backend"] == "G4F"][:15]
+                eaon_top = [m for m in all_models if m["backend"] == "EAON"]
+                print(f"🌟 Selecting Top 15 models from G4F and ALL {len(eaon_top)} models from EAON.")
+            else:
+                g4f_top = [m for m in all_models if m["backend"] == "G4F"][:top_n]
+                eaon_top = [m for m in all_models if m["backend"] == "EAON"][:top_n]
+                print(f"🌟 Selecting Top {top_n} models from G4F and Top {top_n} models from EAON.")
+            pre_test_models = g4f_top + eaon_top
         else:
             # Default to ALL models across both backends
-            final_models = all_models
+            pre_test_models = all_models
+            
+    final_models = []
+    if do_test:
+        print("\n🔬 Running live tests on selected models...")
+        for m in pre_test_models:
+            if test_model_live(m):
+                final_models.append(m)
+        print(f"✅ {len(final_models)} out of {len(pre_test_models)} passed the test.")
+    else:
+        final_models = pre_test_models
         
     if not final_models:
         print("⚠️ No valid models to save to opencode.json. Exiting.")
@@ -441,7 +449,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Smart G4F/EAON Bridge with OpenCode config generation")
     parser.add_argument("-m", "--model", type=str, help="Search for a specific model to use")
     parser.add_argument("-t", "--test", action="store_true", help="Test the selected models before adding them")
-    parser.add_argument("-b", "--best", nargs='?', const=15, default=None, type=int, help="Extract top N models from G4F (defaults to 15) and ALL models from EAON")
+    parser.add_argument("-b", "--best", nargs='?', const=-1, default=None, type=int, help="Extract top N models from G4F (defaults to 15) and ALL models from EAON")
     parser.add_argument("-s", "--setup", action="store_true", help="Run the API key setup wizard to update keys")
     args = parser.parse_args()
     
@@ -460,7 +468,7 @@ if __name__ == "__main__":
         selected = interactive_model_selection(args.model, all_models)
         generate_opencode_config(selected_models=selected, do_test=args.test)
     else:
-        generate_opencode_config(top_n=args.best)
+        generate_opencode_config(top_n=args.best, do_test=args.test)
         
     print(f"\n🚀 Starting Smart Bridge on http://127.0.0.1:{PORT}...")
     uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="info")
