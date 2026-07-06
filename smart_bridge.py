@@ -159,15 +159,23 @@ def test_model_live(model_obj):
     }
     
     try:
-        resp = requests.post(f"{BACKENDS[backend]['url']}/chat/completions", json=payload, headers=headers, timeout=15)
+        resp = requests.post(f"{BACKENDS[backend]['url']}/chat/completions", json=payload, headers=headers, timeout=25)
         if resp.status_code == 200:
             print(f"    ✅ Success!")
             return True
         else:
             print(f"    ❌ Failed with {resp.status_code}: {resp.text[:100]}")
+            print(f"       -> Reason: Model does not meet OpenCode's strict payload/tool requirements.")
+            print(f"       -> Learn more: https://github.com/Yatin-Code/opencode-g4f-bridge/blob/main/TEST_FAILURES.md")
             return False
+    except requests.exceptions.Timeout:
+        print(f"    ❌ Failed: Connection timed out after 25 seconds.")
+        print(f"       -> Reason: The upstream proxy server is dead or overloaded.")
+        print(f"       -> Learn more: https://github.com/Yatin-Code/opencode-g4f-bridge/blob/main/TEST_FAILURES.md")
+        return False
     except Exception as e:
         print(f"    ❌ Failed with exception: {e}")
+        print(f"       -> Learn more: https://github.com/Yatin-Code/opencode-g4f-bridge/blob/main/TEST_FAILURES.md")
         return False
 
 def interactive_model_selection(search_term, all_models):
