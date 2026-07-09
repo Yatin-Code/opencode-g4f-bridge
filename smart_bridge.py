@@ -91,6 +91,7 @@ def load_or_prompt_keys(force_setup=False):
 # Map of { label : model_object }
 # model_object = {"id": str, "label": str, "model": str, "requests": int, "backend": str}
 MODEL_MAP = {}
+EAON_OPERATIONAL_MODELS = set()
 
 def get_all_models():
     all_models = []
@@ -114,35 +115,98 @@ def get_all_models():
         except Exception as e:
             print(f"❌ Failed to fetch G4F models: {e}")
         
-    # 2. Fetch from EAON
+    # 2. Fetch from EAON (catalog, all tiers)
     if "EAON" in BACKENDS:
-        print(f"Fetching models from {BACKENDS['EAON']['url']}/models ...")
-        try:
-            resp = requests.get(f"{BACKENDS['EAON']['url']}/models", headers={"Authorization": f"Bearer {BACKENDS['EAON']['key']}"})
-            resp.raise_for_status()
-            data = resp.json().get("data", [])
-            for m in data:
-                if m.get("id") == "auto": continue
-                # EAON models just have an 'id', we format the label for UI clarity
-                model_id = m.get("id")
-                all_models.append({
-                    "id": model_id,
-                    "label": f"EAON:{model_id}",
-                    "model": model_id,
-                    "requests": 0, # EAON doesn't expose usage metrics
-                    "backend": "EAON"
-                })
-        except Exception as e:
-            print(f"❌ Failed to fetch EAON models: {e}")
-        
+        eaon_models = fetch_eaon_catalog()
+        all_models.extend(eaon_models)
+
+    # Filter EAON models by monitor status
+    if "EAON" in BACKENDS:
+        monitor_operational = fetch_eaon_monitor()
+        if monitor_operational:
+            before = len([m for m in all_models if m["backend"] == "EAON"])
+            all_models = [m for m in all_models if m["backend"] != "EAON" or m["id"] in monitor_operational]
+            after = len([m for m in all_models if m["backend"] == "EAON"])
+            if before > after:
+                print(f"  -> Filtered out {before - after} non-operational EAON models")
+
     # Sort all combined models by requests (descending)
     all_models = sorted(all_models, key=lambda x: x["requests"], reverse=True)
     return all_models
+
+def fetch_eaon_catalog():
+    """Fetch EAON catalog and return all models with tier info."""
+    if "EAON" not in BACKENDS:
+        return []
+    print("Fetching EAON model catalog...")
+    try:
+        resp = requests.get(
+            f"{BACKENDS['EAON']['url']}/models/catalog",
+            headers={"Authorization": f"Bearer {BACKENDS['EAON']['key']}"}
+        )
+        resp.raise_for_status()
+        data = resp.json().get("data", [])
+        result = []
+        for m in data:
+            model_id = m.get("id")
+            tier = m.get("tier", "unknown")
+            result.append({
+                "id": model_id,
+                "label": f"EAON:{model_id}",
+                "model": model_id,
+                "requests": 0,
+                "backend": "EAON",
+                "tier": tier
+            })
+        instant_count = len([m for m in result if m["tier"] == "instant"])
+        plus_count = len([m for m in result if m["tier"] == "plus"])
+        print(f"  -> {len(result)} EAON models found ({instant_count} instant, {plus_count} plus)")
+        return result
+    except Exception as e:
+        print(f"❌ Failed to fetch EAON catalog: {e}")
+        return []
+
+def fetch_eaon_monitor():
+    """Fetch EAON monitor and cache operational model IDs globally."""
+    global EAON_OPERATIONAL_MODELS
+    if "EAON" not in BACKENDS:
+        EAON_OPERATIONAL_MODELS = set()
+        return set()
+    print("Checking EAON model health...")
+    try:
+        resp = requests.get(
+            f"{BACKENDS['EAON']['url']}/monitor/models",
+            headers={"Authorization": f"Bearer {BACKENDS['EAON']['key']}"}
+        )
+        resp.raise_for_status()
+        data = resp.json().get("data", [])
+        operational = {m.get("id") for m in data if m.get("status") == "operational"}
+        EAON_OPERATIONAL_MODELS = operational
+        print(f"  -> {len(operational)} operational EAON models")
+        unavailable = [m for m in data if m.get("status") != "operational"]
+        if unavailable:
+            for m in unavailable:
+                print(f"     ⛔ {m.get('id')}: {m.get('status')}")
+        return operational
+    except Exception as e:
+        print(f"⚠️ Failed to fetch EAON monitor: {e}")
+        EAON_OPERATIONAL_MODELS = set()
+        return set()
 
 def test_model_live(model_obj):
     label = model_obj["label"]
     model_id = model_obj["id"]
     backend = model_obj["backend"]
+    
+    # For EAON, check monitor status first before running the heavy prompt test
+    if backend == "EAON":
+        if model_id in EAON_OPERATIONAL_MODELS:
+            print(f"  ✅ Model '{label}' is operational per EAON monitor — proceeding to stress test...")
+        elif EAON_OPERATIONAL_MODELS:
+            print(f"  ⛔ Model '{label}' is NOT operational per EAON monitor. Skipping.")
+            return False
+        else:
+            print(f"  ⚠️ No monitor data for '{label}' — proceeding directly to stress test...")
     
     print(f"  🧪 Testing model '{label}' via {backend} backend...")
     
@@ -166,7 +230,7 @@ def test_model_live(model_obj):
                 "parameters": {"type": "object", "properties": {}}
             }
         }],
-        "stream": False
+        "stream": True
     }
     
     headers = {
@@ -175,10 +239,24 @@ def test_model_live(model_obj):
     }
     
     try:
-        resp = requests.post(f"{BACKENDS[backend]['url']}/chat/completions", json=payload, headers=headers, timeout=25)
+        resp = requests.post(f"{BACKENDS[backend]['url']}/chat/completions", json=payload, headers=headers, stream=True, timeout=25)
         if resp.status_code == 200:
-            print(f"    ✅ Success!")
-            return True
+            for line in resp.iter_lines():
+                if line:
+                    decoded = line.decode('utf-8')
+                    if decoded.startswith("data: ") and decoded[6:].strip() != "[DONE]":
+                        print(f"    ✅ Stream started successfully!")
+                        resp.close()
+                        return True
+                    elif decoded.strip() == "data: [DONE]":
+                        print(f"    ✅ Stream completed immediately!")
+                        resp.close()
+                        return True
+                else:
+                    continue
+            print(f"    ❌ Empty stream received")
+            resp.close()
+            return False
         else:
             print(f"    ❌ Failed with {resp.status_code}: {resp.text[:100]}")
             print(f"       -> Reason: Model does not meet OpenCode's strict payload/tool requirements.")
@@ -244,12 +322,12 @@ def generate_opencode_config(selected_models=None, do_test=False, top_n=None):
         if top_n is not None:
             if top_n == -1:
                 g4f_top = [m for m in all_models if m["backend"] == "G4F"][:15]
-                eaon_top = [m for m in all_models if m["backend"] == "EAON"]
-                print(f"🌟 Selecting Top 15 models from G4F and ALL {len(eaon_top)} models from EAON.")
+                eaon_top = [m for m in all_models if m["backend"] == "EAON" and m.get("tier") == "plus"]
+                print(f"🌟 Selecting Top 15 models from G4F and ALL {len(eaon_top)} plus-tier models from EAON.")
             else:
                 g4f_top = [m for m in all_models if m["backend"] == "G4F"][:top_n]
-                eaon_top = [m for m in all_models if m["backend"] == "EAON"][:top_n]
-                print(f"🌟 Selecting Top {top_n} models from G4F and Top {top_n} models from EAON.")
+                eaon_top = [m for m in all_models if m["backend"] == "EAON" and m.get("tier") == "plus"][:top_n]
+                print(f"🌟 Selecting Top {top_n} models from G4F and Top {top_n} plus-tier models from EAON.")
             pre_test_models = g4f_top + eaon_top
         else:
             # Default to ALL models across both backends
@@ -477,7 +555,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Smart G4F/EAON Bridge with OpenCode config generation")
     parser.add_argument("-m", "--model", type=str, help="Search for a specific model to use")
     parser.add_argument("-t", "--test", action="store_true", help="Test the selected models before adding them")
-    parser.add_argument("-b", "--best", nargs='?', const=-1, default=None, type=int, help="Extract top N models from G4F (defaults to 15) and ALL models from EAON")
+    parser.add_argument("-b", "--best", nargs='?', const=-1, default=None, type=int, help="Extract top N models from G4F (defaults to 15) and instant-tier models from EAON")
     parser.add_argument("-s", "--setup", action="store_true", help="Run the API key setup wizard to update keys")
     args = parser.parse_args()
     
