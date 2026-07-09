@@ -272,13 +272,22 @@ def test_model_live(model_obj):
         print(f"       -> Learn more: https://github.com/Yatin-Code/opencode-g4f-bridge/blob/main/TEST_FAILURES.md")
         return False
 
-def interactive_model_selection(search_term, all_models):
-    matches = [m for m in all_models if search_term.lower() in m.get("label", "").lower()]
+def interactive_model_selection(search_terms, all_models):
+    seen = set()
+    matches = []
+    for term in search_terms:
+        for m in all_models:
+            label = m.get("label", "").lower()
+            if term.lower() in label and label not in seen:
+                seen.add(label)
+                matches.append(m)
     if not matches:
-        print(f"❌ No models found matching '{search_term}'.")
+        terms = "', '".join(search_terms)
+        print(f"❌ No models found matching '{terms}'.")
         return []
         
-    print(f"\n🔍 Found {len(matches)} matching providers for '{search_term}':")
+    terms = "', '".join(search_terms)
+    print(f"\n🔍 Found {len(matches)} matching providers for '{terms}':")
     for i, m in enumerate(matches, 1):
         reqs = f"{m['requests']} reqs" if m['requests'] > 0 else "Unknown usage"
         print(f"  {i}. {m['label']} ({reqs})")
@@ -553,7 +562,7 @@ async def chat_completions(request: Request):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Smart G4F/EAON Bridge with OpenCode config generation")
-    parser.add_argument("-m", "--model", type=str, help="Search for a specific model to use")
+    parser.add_argument("-m", "--model", type=str, nargs="+", help="Search for models matching one or more terms (e.g. -m gpt deepseek)")
     parser.add_argument("-t", "--test", action="store_true", help="Test the selected models before adding them")
     parser.add_argument("-b", "--best", nargs='?', const=-1, default=None, type=int, help="Extract top N models from G4F (defaults to 15) and instant-tier models from EAON")
     parser.add_argument("-s", "--setup", action="store_true", help="Run the API key setup wizard to update keys")
