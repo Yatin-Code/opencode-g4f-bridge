@@ -2,7 +2,6 @@ import React from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import SelectInput from 'ink-select-input';
 import type { HealthStatus } from '../lib/types.js';
-import AnimatedLogo from '../components/animated-logo.js';
 import StatusBadge from '../components/status-badge.js';
 import Footer from '../components/footer.js';
 
@@ -55,9 +54,8 @@ export default function WelcomeScreen({
 
   return (
     <Box flexDirection="column" padding={1}>
-      <AnimatedLogo />
 
-      <Box flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} marginTop={1}>
+      <Box flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1}>
         <StatusBadge
           label="Bridge"
           status={bridgeStatus}

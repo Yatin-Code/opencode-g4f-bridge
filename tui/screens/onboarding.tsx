@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
+import AnimatedLogo from '../components/animated-logo.js';
 import Divider from '../components/divider.js';
 import {
   loadKeys, saveKeys, loadOnboardingState, saveOnboardingState,
@@ -67,6 +68,7 @@ export default function OnboardingScreen({ onComplete, onBack }: OnboardingScree
 
   return (
     <Box flexDirection="column" padding={1}>
+      <AnimatedLogo />
       <Box marginBottom={1} justifyContent="center">
         <StepIndicator currentStep={step} totalSteps={3} labels={STEP_LABELS} />
       </Box>

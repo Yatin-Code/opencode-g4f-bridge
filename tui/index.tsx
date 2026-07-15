@@ -77,6 +77,7 @@ function main(): void {
   }
 
   try {
+    console.clear();
     const { waitUntilExit } = render(React.createElement(App, { initialScreen: screen ?? undefined }));
     waitUntilExit().then(() => bridge.destroy());
   } catch (err) {
