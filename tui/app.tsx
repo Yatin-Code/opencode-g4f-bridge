@@ -90,6 +90,7 @@ export default function App({ initialScreen }: AppProps) {
             setScreen('dashboard');
           }}
           onBack={() => setScreen('welcome')}
+          onExit={() => { bridge.destroy(); exit(); }}
         />
       );
     case 'model-picker':

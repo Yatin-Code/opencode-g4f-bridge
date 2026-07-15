@@ -14,11 +14,12 @@ import Footer from '../components/footer.js';
 interface OnboardingScreenProps {
   onComplete: () => void;
   onBack: () => void;
+  onExit: () => void;
 }
 
 const STEP_LABELS = ['Keys', 'IDEs', 'Done'];
 
-export default function OnboardingScreen({ onComplete, onBack }: OnboardingScreenProps) {
+export default function OnboardingScreen({ onComplete, onBack, onExit }: OnboardingScreenProps) {
   const [step, setStep] = useState(0);
   const existingKeys = loadKeys();
   const prevState = loadOnboardingState();
@@ -50,9 +51,9 @@ export default function OnboardingScreen({ onComplete, onBack }: OnboardingScree
   }, [step, g4fKey, eaonKey, existingKeys, selectedTargets, prevState, onComplete]);
 
   const handleBack = useCallback(() => {
-    if (step === 0) onBack();
+    if (step === 0) onExit();
     else setStep(s => s - 1);
-  }, [step, onBack]);
+  }, [step, onExit]);
 
   const toggleTarget = useCallback((target: TargetTool) => {
     setSelectedTargets(prev => {
@@ -114,7 +115,7 @@ export default function OnboardingScreen({ onComplete, onBack }: OnboardingScree
             ]
           : [
               { key: 'Enter', label: step < 2 ? 'next' : 'launch' },
-              { key: 'esc', label: step === 0 ? 'back' : 'prev' },
+              { key: 'esc', label: step === 0 ? 'quit' : 'prev' },
               { key: 'Tab', label: 'switch' },
             ]
       } />
