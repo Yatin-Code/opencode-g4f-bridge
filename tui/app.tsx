@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import type { Screen, HealthStatus } from './lib/types.js';
-import { loadKeys, isFirstRun } from './lib/config-paths.js';
+import { loadKeys, isFirstRun, loadOnboardingState } from './lib/config-paths.js';
 import { healthCheck as checkBridgeHealth } from './lib/api.js';
 import { bridge } from './lib/bridge-process.js';
 import WelcomeScreen from './screens/welcome.js';
@@ -62,12 +62,21 @@ export default function App({ initialScreen }: AppProps) {
     }
   });
 
+  const getBridgeArgs = useCallback((): string[] => {
+    const state = loadOnboardingState();
+    const args = ['-b'];
+    if (state.selectedTargets.length > 0) {
+      args.push('--target', ...state.selectedTargets);
+    }
+    return args;
+  }, []);
+
   const startBridge = useCallback(() => {
     setHealth(prev => ({ ...prev, bridge: 'starting' }));
-    bridge.start();
+    bridge.start(getBridgeArgs());
     setHealth(prev => ({ ...prev, bridge: 'running' }));
     setScreen('dashboard');
-  }, []);
+  }, [getBridgeArgs]);
 
   switch (screen) {
     case 'welcome':
@@ -86,7 +95,7 @@ export default function App({ initialScreen }: AppProps) {
         <OnboardingScreen
           onComplete={() => {
             setHealth(prev => ({ ...prev, bridge: 'starting' }));
-            bridge.start();
+            bridge.start(getBridgeArgs());
             setScreen('dashboard');
           }}
           onBack={() => setScreen('welcome')}
