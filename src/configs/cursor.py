@@ -1,3 +1,4 @@
+import os
 from ..bridge.utils import _get_cursor_config_dir, _safe_read_json, _safe_write_json
 
 
