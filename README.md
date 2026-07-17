@@ -85,10 +85,10 @@ Your Tool ──► g4f-bridge:1337 ──► G4F / EAON
 
 ## Supported Tools
 
-| Tool | Config | Format |
+| Tool | Config | Format | Status |
 |------|--------|--------|
-| OpenCode | `~/.config/opencode/opencode.json` | `@ai-sdk/openai-compatible` |
-| Claude Code | `~/.claude/settings.json` | Anthropic env vars |
+| OpenCode | `~/.config/opencode/opencode.json` | `@ai-sdk/openai-compatible` | ✅ Working|
+| Claude Code | `~/.claude/settings.json` | Anthropic env vars | ✅ Working |
 | Codex CLI | `~/.codex/config.toml` | Custom provider |
 | Cursor | `~/.cursor/settings.json` | OpenAI API |
 | Antigravity | `~/.gemini/settings.json` | Base URL |
